@@ -1,5 +1,5 @@
 <?php
-function split($params) {
+function split($params = array()) {
   global $split_formatted_shares, $seed, $split_shares;
   clear();
 
@@ -38,7 +38,6 @@ function split($params) {
       goto threshold;
     }
 
-    //enemy bounce riot memory shrimp village elevator joke powder infant labor inch
     $indexes = compress_seed($seed);
 
     exec("echo -n \"$indexes\" | secret-share-split --count $count --threshold $threshold", $split_shares);
@@ -48,6 +47,9 @@ function split($params) {
     foreach($split_shares as $share) {
       $share = strtoupper($share);
 
+      $cmd = "echo -n $share | md5sum | awk '{print $1}'";
+      $full_checksum = strtoupper(exec($cmd));
+
       $formatted_lines = array();
       $lines = str_split($share, 20);
       foreach ($lines as $line) {
@@ -55,12 +57,18 @@ function split($params) {
         $crc = strtoupper(exec($cmd));
 
         $line_parts = str_split($line, 2);
-        $formatted_lines[] = implode(" ", $line_parts) . "\t$crc";
+        $formatted_lines[] = array(
+          "line" => implode(" ", $line_parts),
+          "crc" => "$crc"
+        );
       }
 
       $split_formatted_shares[] = array(
         "share" => substr($share, 0, 10) . "...",
-        "formatted_lines" => $formatted_lines
+        "full_share" => $share,
+        "formatted_lines" => $formatted_lines,
+        "full_checksum" => $full_checksum,
+        "threshold" => $threshold
       );
     }
   }
@@ -85,22 +93,63 @@ function view_share($params) {
   clear();
 
   echo "Share #$share_idx\n\n";
+  echo "Line #\t" . str_pad("Share", 20 + 9, " ", STR_PAD_RIGHT) . "\tChecksum\n";
 
-  echo implode("\n", $formatted_lines) . "\n\n";
-
-  wait_for_key("c");
-
-  clear();
-
-  echo "Seed is: $seed\n";
+  $line_idx = 1;
+  foreach($formatted_lines as $formatted_line) {
+    echo $line_idx . "\t" . str_pad($formatted_line["line"], 20 + 9, " ", STR_PAD_RIGHT) . "\t" . $formatted_line["crc"] . "\n";
+    $line_idx++;
+  }
+  echo "\n";
 
   custom_menu(
-    "See shares:",
-    build_menu_from_formatted_shares()
+    "Make your choice:",
+    array(
+        array(
+          "label" => "Print this share",
+          "action" => "split_print_share",
+          "params" => array(
+            "share" => $share
+          )
+        ),
+        array(
+          "label" => "Return to shares",
+          "action" => "split"
+        )
+    )
   );
 }
 
 function split_new_seed() {
   global $split_formatted_shares, $seed, $split_shares;
   clear();
+}
+
+function split_print_share($params) {
+  $share = $params["share"];
+
+  $lines = $share["formatted_lines"];
+  $full_checksum = $share["full_checksum"];
+  $threshold = $share["threshold"];
+  $full_share = $share["full_share"];
+  $compact_share = str_split($full_share, round(strlen($full_share) / 3));
+
+  ob_start();
+  include 'print-template.php';
+  $html = ob_get_clean();
+
+  $html_file = "tmp/" . uniqid() . ".html";
+  $pdf_file = "tmp/" . uniqid() . ".pdf";
+  file_put_contents($html_file, $html);
+  exec("wkhtmltopdf $html_file $pdf_file");
+
+  exec("lpr " . $pdf_file);
+
+  unlink($html_file);
+  unlink($pdf_file);
+
+  echo "Print job sent.\n";
+  wait_for_key("c");
+
+  split();
 }

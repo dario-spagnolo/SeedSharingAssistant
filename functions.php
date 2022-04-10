@@ -1,6 +1,7 @@
 <?php
 
 function quit() {
+  clean_tmp();
   die("\n");
 }
 
@@ -57,4 +58,9 @@ function read_keypress() {
   exec("stty cbreak");
   $keypress = fgetc($stdin);
   return $keypress;
+}
+
+function clean_tmp() {
+  //TODO use unlink()
+  exec("rm -f tmp/*");
 }
